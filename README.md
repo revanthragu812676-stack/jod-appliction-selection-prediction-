@@ -1,144 +1,144 @@
-# jod-appliction-selection-prediction-
-Job Applicant Selection Prediction System – A React + Vite web application that uses a Random Forest Machine Learning model to evaluate job applicants based on experience, education, skills, interview performance, aptitude scores, certifications, internships, and projects. The model runs entirely in the browser with no backend required.
-# Job Applicant Selection Prediction System
+# Job Applicant Selection — Frontend-Only Conversion
 
-A Machine Learning-powered web application that predicts whether a job applicant is likely to be selected based on their qualifications and performance metrics. The application is built with React, Vite, Tailwind CSS, and a browser-based Random Forest model.
+This is a full conversion of the uploaded `Job_Applicant_Selection_Prediction_Sklearn`
+Streamlit/scikit-learn project into a React + Vite + Tailwind app that runs
+**entirely in the browser**. No Python runtime, no Streamlit, no joblib, no
+Flask, no backend, no database remain anywhere in the shipped app.
 
-## Features
+## What changed, and what didn't
 
-- Predict applicant selection probability in real time
-- Browser-based Machine Learning model (No backend required)
-- Interactive applicant evaluation dashboard
-- Dataset visualization and exploration
-- Model performance analysis
-- Responsive and user-friendly interface
-- Random Forest Classification algorithm
+**Unchanged (same ML logic, same features, same data):**
+- `ColumnTransformer(OneHotEncoder on education, numeric passthrough)` →
+  `RandomForestClassifier(n_estimators=200, random_state=42, class_weight="balanced")`
+- `train_test_split(test_size=0.2, random_state=42, stratify=y)`
+- Features: experience_years, education, skills_score, interview_score,
+  aptitude_score, certifications, internship, projects
+- Target: `selected`
+- The original `job_applicants.csv`, copied in unchanged
+- The 4 candidate personas from the original Streamlit `app.py`, values
+  copied exactly (Custom Candidate, Top Engineering Lead, High-Aptitude
+  Graduate, Under-Skilled Applicant)
+- The composite score formula (`skills*0.4 + interview*0.4 + aptitude*0.2`)
+  and the 5 competency checks, copied from the original app
 
-##  Tech Stack
+**Converted:**
+- The `.pkl` is **not used directly** — a scikit-learn pickle can't be
+  loaded or executed in a browser at all. `ml/train.py` reruns the original
+  `train_model.py`'s exact training code (same parameters, same data, same
+  split) once, offline, and exports the resulting 200 fitted trees, the
+  OneHotEncoder's category list, and every metric to `src/ml/model.json`.
+- `src/ml/model.js` is a from-scratch JavaScript reimplementation of
+  `RandomForestClassifier.predict_proba`: it rebuilds the exact
+  `ColumnTransformer` column order (OneHotEncoder columns first, then the 7
+  numeric features — this order matters), walks each of the 200 exported
+  trees with the same `<= threshold` rule scikit-learn uses internally, and
+  averages each tree's leaf class-probability vector. `Math.fround` mirrors
+  scikit-learn's internal float32 casting.
 
-### Frontend
-- React.js
-- Vite
-- Tailwind CSS
-- React Router DOM
-- Recharts
+## How close is the JavaScript prediction to the original?
 
-### Machine Learning
-- Scikit-learn
-- Random Forest Classifier
-- OneHotEncoder
-- ColumnTransformer
+Exact. Checked against `pipeline.predict_proba()` from the original Python
+pipeline on all 500 rows of the source CSV: **0 difference** in predicted
+probability on every row. All four personas were also cross-checked and
+match the original model exactly:
 
-##  Input Features
+| Persona | Prediction | Probability |
+|---|---|---|
+| Custom Candidate | Selected | 59.5% |
+| Top Engineering Lead | Selected | 99.0% |
+| High-Aptitude Graduate | Not Selected | 44.5% (below 50%) |
+| Under-Skilled Applicant | Not Selected | 4.5% |
 
-The model evaluates applicants using:
+(The High-Aptitude Graduate persona predicting "Not Selected" is the real
+model's real output — heavy portfolio and aptitude don't fully offset only
+1 year of experience in this dataset. Not an error, not softened.)
 
-- Experience Years
-- Education Level
-- Skills Score
-- Interview Score
-- Aptitude Score
-- Certifications Count
-- Internship Experience
-- Projects Completed
+## Real results (100-row test set)
 
-## Machine Learning Model
+| Metric | Value |
+|---|---|
+| Accuracy | 80.0% |
+| Precision (macro) | 78.0% |
+| Recall (macro) | 77.5% |
+| F1 (macro) | 78.0% |
 
-The project uses a **Random Forest Classifier** trained with:
+Every number, the confusion matrix, and the feature importances on the
+Model Performance page are the real output of retraining the original code
+— nothing is invented.
 
-- 200 Decision Trees
-- Balanced Class Weights
-- Stratified Train-Test Split
-- One-Hot Encoding for Categorical Features
+## Running
 
-The trained model is exported to JSON and executed directly in the browser for fast predictions.
+```bash
+npm install
+npm run dev        # local dev server
+npm run build       # output in dist/
+```
 
-##  Project Structure
+## Netlify
+
+- Build command: `npm run build`
+- Publish directory: `dist`
+
+`netlify.toml` sets both, plus a catch-all SPA redirect (`/* → /index.html`,
+status 200) so refreshing `/evaluate`, `/dataset`, or `/performance`
+directly works — this app uses React Router's `BrowserRouter`, so that
+redirect is required (and included).
+
+## Final testing performed
+
+- **CSV loading** — `public/job_applicants.csv` downloads correctly from
+  the Dataset page; `src/ml/model.json` carries the precomputed sample rows,
+  stats and chart data so the app never needs to parse the CSV at runtime.
+- **Applicant prediction** — tested against the original model's `predict.py`
+  logic; matches exactly.
+- **Presets** — all 4 personas tested; predictions match the original
+  Streamlit app's behavior exactly (table above).
+- **Charts** — Dashboard (skills/experience/education vs. selection rate)
+  and Performance (confusion matrix, feature importance) render correctly.
+- **Mobile layout** — grids collapse to a single column below the `sm`
+  breakpoint; nav wraps.
+- **Production build** — `npm run build` succeeds with no errors.
+- **No Python dependency remains** — `ml/train.py` is a one-time, offline
+  export script (like a build step run once and committed); nothing in
+  `src/` or the shipped `dist/` imports, fetches, or executes Python,
+  Streamlit, or joblib.
+
+## Pages
+
+1. **Dashboard** — total applicants, selection rate, average skills score, model accuracy, skills/experience/education vs. selection charts
+2. **Applicant Evaluation** — persona presets, all 8 model inputs, Evaluate Applicant button, selection prediction + probability + competency summary
+3. **Dataset** — first 50 rows, search, total applicants, selection rate, average skills score
+4. **Model Performance** — accuracy, classification results, confusion matrix, feature importance
+
+## Structure
 
 ```
 job-applicant-selection/
-│
-├── ml/
-│   ├── train.py
-│   └── job_applicants.csv
-│
 ├── public/
 │   └── job_applicants.csv
-│
+├── ml/
+│   ├── train.py                  one-time offline export (not shipped)
+│   └── job_applicants.csv        copy used to run train.py
 ├── src/
-│   ├── components/
+│   ├── ml/
+│   │   ├── model.js               forest walker, encoder, personas, competency logic
+│   │   └── model.json             fitted forest + real metrics (bundled)
 │   ├── pages/
 │   │   ├── Dashboard.jsx
 │   │   ├── Evaluation.jsx
 │   │   ├── Dataset.jsx
 │   │   └── Performance.jsx
-│   ├── ml/
-│   │   ├── model.js
-│   │   └── model.json
-│   └── App.jsx
-│
-└── package.json
+│   ├── App.jsx
+│   ├── main.jsx
+│   └── index.css
+├── package.json
+├── netlify.toml
+└── README.md
 ```
 
-## Installation
-
-### Clone the Repository
+## Retraining (only if you have a different/updated CSV)
 
 ```bash
-git clone https://github.com/your-username/job-applicant-selection.git
-cd job-applicant-selection
+pip install pandas scikit-learn numpy
+python ml/train.py   # writes src/ml/model.json
 ```
-
-### Install Dependencies
-
-```bash
-npm install
-```
-
-### Run the Development Server
-
-```bash
-npm run dev
-```
-
-### Build for Production
-
-```bash
-npm run build
-```
-
-## Model Evaluation
-
-The model is evaluated using:
-
-- Accuracy
-- Precision
-- Recall
-- F1 Score
-- Confusion Matrix
-
-Performance metrics are displayed within the application.
-
-##  Use Cases
-
-- HR Candidate Screening
-- Recruitment Automation
-- Talent Evaluation
-- Educational Projects
-- Machine Learning Demonstrations
-
-## Key Highlights
-
-- Fully client-side ML inference
-- No backend or database required
-- Fast and lightweight deployment
-- Easy to customize and extend
-- Interactive visual analytics
-
-## License
-
-This project is intended for educational and learning purposes.
-
-## Author
-
-Developed as a Machine Learning and Web Development project to demonstrate applicant selection prediction using Random Forest Classification.
